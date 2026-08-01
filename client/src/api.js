@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+let rawBase = import.meta.env.VITE_API_URL || 'https://the-alchemist-afnj.onrender.com/api';
+if (rawBase.endsWith('/')) rawBase = rawBase.slice(0, -1);
+if (!rawBase.endsWith('/api')) rawBase = rawBase + '/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: rawBase,
 });
 
 // Add a request interceptor to attach the JWT token
