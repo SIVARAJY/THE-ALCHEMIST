@@ -1,1 +1,9 @@
 https://the-alchemist-sigma.vercel.app
+
+sample credentials 
+Admin:
+mail:testadmin@gmail.com     password:testadmin
+Organizer:
+mail:testorganizer@gmail.com  password:testorganizer
+attendee:
+mail:testattendee@gmail.com   password:testattendee
