@@ -50,6 +50,14 @@ app.use('/api/records', verifyToken, require('./routes/records'));
 app.use('/api/policies', verifyToken, require('./routes/policies'));
 app.use('/api/users', verifyToken, require('./routes/users'));
 
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'Meera Meeting Room API Backend is running live.', healthCheck: '/api/health' });
+});
+
+app.get('/api', (req, res) => {
+  res.json({ status: 'ok', message: 'Meera Meeting Room API Backend is running live.', healthCheck: '/api/health' });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Meeting Room API is running.' });
 });
