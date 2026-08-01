@@ -102,7 +102,11 @@ router.post('/login', async (req, res) => {
       .eq('email', email.toLowerCase().trim())
       .single();
 
-    if (error || !user) {
+    if (error) {
+      console.error('Supabase Profile Fetch Error:', error);
+      return res.status(401).json({ message: 'User not found or database error: ' + error.message });
+    }
+    if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
