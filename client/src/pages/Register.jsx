@@ -3,6 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Calendar, User, Lock, ArrowRight, Mail } from 'lucide-react';
 import axios from 'axios';
 
+import api from '../api';
+
 const Register = () => {
   const [formData, setFormData] = useState({ name: '', email: '', password: '', category: 'student' });
   const [error, setError] = useState('');
@@ -15,7 +17,7 @@ const Register = () => {
     setError('');
     
     try {
-      await axios.post('http://localhost:5000/api/auth/register', formData);
+      await api.post('/auth/register', formData);
       navigate('/login');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to register');

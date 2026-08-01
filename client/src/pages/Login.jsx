@@ -18,7 +18,7 @@ const Login = () => {
     
     try {
       // API call to our Node backend
-      const response = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+      const response = await api.post('/auth/login', { email, password });
       const { user, token } = response.data;
       
       localStorage.setItem('token', token);
