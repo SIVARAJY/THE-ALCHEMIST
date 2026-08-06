@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Building, Monitor, Calendar, LogOut, Plus, Trash2, Edit2, CheckSquare, Square, X, CalendarDays, MessageSquare, Star, FileText, Search, ClipboardList, Settings, Users, Menu } from 'lucide-react';
+import { LayoutDashboard, Building, Monitor, Calendar, LogOut, Plus, Trash2, Edit2, CheckSquare, Square, X, CalendarDays, MessageSquare, Star, FileText, Search, ClipboardList, Settings, Users, Menu, FileSpreadsheet } from 'lucide-react';
 import api from '../api';
 import CalendarView from '../components/CalendarView';
 import NotificationBell from '../components/NotificationBell';
@@ -9,6 +9,7 @@ import AuditLogsView from '../components/AuditLogsView';
 import MeetingRecords from '../components/MeetingRecords';
 import PolicySettings from '../components/PolicySettings';
 import UserManagement from '../components/UserManagement';
+import MeetingReportGenerator from '../components/MeetingReportGenerator';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -265,6 +266,12 @@ const AdminDashboard = () => {
             className={`flex items-center w-full px-4 py-3 rounded-xl transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
           >
             <Users className="w-5 h-5 mr-3" /> User Management
+          </button>
+          <button 
+            onClick={() => { setActiveTab('reports'); setIsMobileMenuOpen(false); }}
+            className={`flex items-center w-full px-4 py-3 rounded-xl transition-all ${activeTab === 'reports' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+          >
+            <FileSpreadsheet className="w-5 h-5 mr-3" /> Export Reports
           </button>
         </nav>
 
@@ -717,6 +724,10 @@ const AdminDashboard = () => {
 
           {activeTab === 'users' && (
             <UserManagement />
+          )}
+
+          {activeTab === 'reports' && (
+            <MeetingReportGenerator />
           )}
         </main>
       </div>
