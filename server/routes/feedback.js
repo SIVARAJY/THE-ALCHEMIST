@@ -54,6 +54,14 @@ router.post('/', async (req, res) => {
       throw error;
     }
     
+    try {
+      await supabase.from('audit_logs').insert([{
+        user_id,
+        action: 'FEEDBACK_SUBMITTED',
+        details: `Feedback rating submitted: Room ${rating_room || '-'}★, Overall ${rating_overall || '-'}★`
+      }]);
+    } catch (e) { console.error('Audit log error on feedback:', e); }
+
     res.status(201).json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });

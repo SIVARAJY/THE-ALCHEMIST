@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building, Monitor, Calendar, Users, Clock, History } from 'lucide-react';
 import api from '../api';
+import LiveActivityFeed from './LiveActivityFeed';
 
 const AdminStats = () => {
   const [stats, setStats] = useState(null);
@@ -117,6 +118,9 @@ const AdminStats = () => {
           </div>
         </div>
       </div>
+
+      {/* Live Real-Time Activity Stream Feed */}
+      <LiveActivityFeed />
     </div>
   );
 };

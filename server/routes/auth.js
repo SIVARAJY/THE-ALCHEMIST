@@ -55,7 +55,16 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: insertError.message });
     }
 
-    // 4. Generate custom JWT token
+    // 4. Log audit event
+    try {
+      await supabase.from('audit_logs').insert([{
+        user_id: newUser.id,
+        action: 'USER_REGISTERED',
+        details: `New ${newUser.role} registered: ${newUser.name} (${newUser.email})`
+      }]);
+    } catch (e) { console.error('Audit log error on register:', e); }
+
+    // 5. Generate custom JWT token
     const token = jwt.sign(
       {
         id: newUser.id,
