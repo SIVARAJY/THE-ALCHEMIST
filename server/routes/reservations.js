@@ -232,15 +232,63 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Metadata Storage Helpers (stores MoM, Descriptions, and Venue Requests)
+const savePolicyMeta = async (key, value) => {
+  try {
+    await supabase.from('policies').upsert({ key, value: typeof value === 'object' ? JSON.stringify(value) : String(value), description: 'System Meta' });
+  } catch (e) { console.error('Meta save error:', e); }
+};
+
+const getPolicyMeta = async (key) => {
+  try {
+    const { data } = await supabase.from('policies').select('value').eq('key', key).single();
+    if (!data) return null;
+    try { return JSON.parse(data.value); } catch (e) { return data.value; }
+  } catch (e) { return null; }
+};
+
+// Enrich reservation object with metadata (description, MoM, venue change)
+const enrichReservation = async (res) => {
+  const desc = await getPolicyMeta(`desc_${res.id}`);
+  const mom = await getPolicyMeta(`mom_${res.id}`);
+  const vc = await getPolicyMeta(`vc_${res.id}`);
+
+  let requestedRoom = null;
+  if (vc?.requested_room_id) {
+    const { data: rm } = await supabase.from('rooms').select('name, location, floor').eq('id', vc.requested_room_id).single();
+    requestedRoom = rm;
+  }
+
+  // Format meetings object to include minutes_of_meeting
+  let meetings = res.meetings;
+  if (Array.isArray(meetings) && meetings.length > 0) {
+    meetings = meetings.map(m => ({ ...m, minutes_of_meeting: mom?.minutes_of_meeting || null }));
+  } else if (meetings && typeof meetings === 'object') {
+    meetings = { ...meetings, minutes_of_meeting: mom?.minutes_of_meeting || null };
+  }
+
+  return {
+    ...res,
+    description: desc || res.description || null,
+    venue_change_status: vc?.status || res.venue_change_status || null,
+    venue_change_reason: vc?.reason || res.venue_change_reason || null,
+    requested_room_id: vc?.requested_room_id || null,
+    requested_room: requestedRoom,
+    meetings
+  };
+};
+
 // Get Organizer's reservations
 router.get('/organizer/:id', async (req, res) => {
   try {
     const { data, error } = await supabase.from('reservations')
-      .select('*, rooms!room_id(name, location, floor), requested_room:rooms!requested_room_id(name, location, floor), meetings(id, title, minutes_of_meeting, mom_submitted_at)')
+      .select('*, rooms(name, location, floor), meetings(id, title)')
       .eq('organizer_id', req.params.id)
       .order('date', { ascending: false });
     if (error) throw error;
-    res.json(data);
+
+    const enriched = await Promise.all((data || []).map(r => enrichReservation(r)));
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -250,10 +298,12 @@ router.get('/organizer/:id', async (req, res) => {
 router.get('/pending', async (req, res) => {
   try {
     const { data, error } = await supabase.from('reservations')
-      .select('*, profiles(name, email, category), rooms!room_id(name, location, floor), requested_room:rooms!requested_room_id(name, location, floor), meetings(id, title)')
+      .select('*, profiles(name, email, category), rooms(name, location, floor), meetings(id, title)')
       .eq('status', 'pending');
     if (error) throw error;
-    res.json(data);
+
+    const enriched = await Promise.all((data || []).map(r => enrichReservation(r)));
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -264,14 +314,16 @@ router.get('/', async (req, res) => {
   try {
     const { status } = req.query;
     let query = supabase.from('reservations')
-      .select('*, profiles(name, email, category), rooms!room_id(name, location, floor), requested_room:rooms!requested_room_id(name, location, floor), meetings(id, title, minutes_of_meeting, mom_submitted_at)')
+      .select('*, profiles(name, email, category), rooms(name, location, floor), meetings(id, title)')
       .order('date', { ascending: false });
     if (status && status !== 'all') {
       query = query.eq('status', status);
     }
     const { data, error } = await query;
     if (error) throw error;
-    res.json(data);
+
+    const enriched = await Promise.all((data || []).map(r => enrichReservation(r)));
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -281,22 +333,21 @@ router.get('/', async (req, res) => {
 router.post('/:id/venue-change-request', async (req, res) => {
   const { requested_room_id, reason } = req.body;
   try {
-    const { data, error } = await supabase.from('reservations')
-      .update({
-        requested_room_id,
-        venue_change_reason: reason,
-        venue_change_status: 'pending'
-      })
-      .eq('id', req.params.id)
-      .select()
-      .single();
+    const resId = req.params.id;
+    const { data: reservation } = await supabase.from('reservations').select('*').eq('id', resId).single();
 
-    if (error) throw error;
+    const vcData = {
+      requested_room_id,
+      reason,
+      status: 'pending'
+    };
 
-    notifyAdmins(`Venue change requested for booking ID ${req.params.id}`, 'request');
-    logAudit(data.organizer_id, 'VENUE_CHANGE_REQUESTED', `Venue change requested to room ID ${requested_room_id}`);
+    await savePolicyMeta(`vc_${resId}`, vcData);
 
-    res.json({ message: 'Venue change request submitted to Admin for approval', reservation: data });
+    notifyAdmins(`Venue change requested for booking ID ${resId}`, 'request');
+    logAudit(reservation?.organizer_id, 'VENUE_CHANGE_REQUESTED', `Venue change requested to room ID ${requested_room_id}`);
+
+    res.json({ message: 'Venue change request submitted to Admin for approval', reservation });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -306,34 +357,34 @@ router.post('/:id/venue-change-request', async (req, res) => {
 router.put('/:id/venue-change-approve', async (req, res) => {
   const { status, admin_notes } = req.body; // 'approved' or 'rejected'
   try {
-    const { data: currentRes, error: fetchErr } = await supabase.from('reservations')
+    const resId = req.params.id;
+    const { data: currentRes } = await supabase.from('reservations')
       .select('*, meetings(id, title)')
-      .eq('id', req.params.id)
+      .eq('id', resId)
       .single();
 
-    if (fetchErr) throw fetchErr;
+    const vcMeta = (await getPolicyMeta(`vc_${resId}`)) || {};
+    vcMeta.status = status;
+    if (admin_notes) vcMeta.admin_notes = admin_notes;
 
-    let updateData = { venue_change_status: status };
-    if (admin_notes) updateData.admin_notes = admin_notes;
-
-    if (status === 'approved' && currentRes.requested_room_id) {
-      updateData.room_id = currentRes.requested_room_id;
+    let updatedRes = currentRes;
+    if (status === 'approved' && vcMeta.requested_room_id) {
+      const { data: newRoomRes } = await supabase.from('reservations')
+        .update({ room_id: vcMeta.requested_room_id })
+        .eq('id', resId)
+        .select('*, rooms(name, location)')
+        .single();
+      if (newRoomRes) updatedRes = newRoomRes;
     }
 
-    const { data: updatedRes, error: updateErr } = await supabase.from('reservations')
-      .update(updateData)
-      .eq('id', req.params.id)
-      .select('*, rooms(name, location)')
-      .single();
+    await savePolicyMeta(`vc_${resId}`, vcMeta);
 
-    if (updateErr) throw updateErr;
-
-    const title = currentRes.meetings?.[0]?.title || 'Meeting';
-    const roomName = updatedRes.rooms?.name || 'New Room';
+    const title = currentRes?.meetings?.[0]?.title || currentRes?.meetings?.title || 'Meeting';
+    const roomName = updatedRes?.rooms?.name || 'New Room';
 
     if (status === 'approved') {
       notifyUser(currentRes.organizer_id, `Venue change APPROVED! Meeting "${title}" moved to ${roomName}.`, 'success');
-      notifyAttendees(req.params.id, `Venue Updated: Meeting "${title}" is now held at ${roomName}.`, 'info');
+      notifyAttendees(resId, `Venue Updated: Meeting "${title}" is now held at ${roomName}.`, 'info');
       logAudit(currentRes.organizer_id, 'VENUE_CHANGE_APPROVED', `Venue change approved to ${roomName}`);
     } else {
       notifyUser(currentRes.organizer_id, `Venue change request for "${title}" was REJECTED by Admin.`, 'warning');
@@ -350,29 +401,25 @@ router.put('/:id/venue-change-approve', async (req, res) => {
 router.post('/:id/mom', async (req, res) => {
   const { minutes_of_meeting } = req.body;
   try {
-    const { data: meeting, error: fetchErr } = await supabase.from('meetings')
+    const resId = req.params.id;
+    const { data: meetings } = await supabase.from('meetings')
       .select('id, title, reservation_id, reservations(organizer_id)')
-      .eq('reservation_id', req.params.id)
-      .single();
+      .eq('reservation_id', resId);
 
-    if (fetchErr) throw fetchErr;
+    const meetingObj = (meetings && meetings.length > 0) ? meetings[0] : {};
 
-    const { data: updatedMeeting, error: updateErr } = await supabase.from('meetings')
-      .update({
-        minutes_of_meeting,
-        mom_submitted_at: new Date()
-      })
-      .eq('id', meeting.id)
-      .select()
-      .single();
+    await savePolicyMeta(`mom_${resId}`, {
+      minutes_of_meeting,
+      submitted_at: new Date().toISOString(),
+      title: meetingObj.title || 'Meeting'
+    });
 
-    if (updateErr) throw updateErr;
+    notifyAttendees(resId, `Minutes of Meeting (MoM) posted for "${meetingObj.title || 'Meeting'}".`, 'info');
+    logAudit(meetingObj.reservations?.organizer_id, 'MOM_SUBMITTED', `MoM submitted for meeting "${meetingObj.title || 'Meeting'}"`);
 
-    notifyAttendees(req.params.id, `Minutes of Meeting (MoM) posted for "${meeting.title}".`, 'info');
-    logAudit(meeting.reservations?.organizer_id, 'MOM_SUBMITTED', `MoM submitted for meeting "${meeting.title}"`);
-
-    res.json({ message: 'Minutes of Meeting (MoM) saved successfully', meeting: updatedMeeting });
+    res.json({ message: 'Minutes of Meeting (MoM) saved successfully', minutes_of_meeting });
   } catch (error) {
+    console.error('MoM save error:', error);
     res.status(500).json({ error: error.message });
   }
 });
