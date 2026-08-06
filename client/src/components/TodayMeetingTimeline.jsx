@@ -36,14 +36,17 @@ const TodayMeetingTimeline = ({ userId }) => {
 
   // Countdown Helper
   const getCountdownStatus = (startTimeStr, endTimeStr) => {
-    const [sH, sM] = startTimeStr.split(':');
-    const [eH, eM] = endTimeStr.split(':');
+    if (!startTimeStr || !endTimeStr) {
+      return { label: 'Scheduled', color: 'bg-slate-100 text-slate-600 border-slate-200' };
+    }
+    const [sH, sM] = (startTimeStr || '00:00').split(':');
+    const [eH, eM] = (endTimeStr || '00:00').split(':');
 
     const startTime = new Date();
-    startTime.setHours(parseInt(sH, 10), parseInt(sM, 10), 0, 0);
+    startTime.setHours(parseInt(sH, 10) || 0, parseInt(sM, 10) || 0, 0, 0);
 
     const endTime = new Date();
-    endTime.setHours(parseInt(eH, 10), parseInt(eM, 10), 0, 0);
+    endTime.setHours(parseInt(eH, 10) || 0, parseInt(eM, 10) || 0, 0, 0);
 
     const diffMs = startTime - now;
     const diffMins = Math.round(diffMs / 60000);

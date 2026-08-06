@@ -199,9 +199,9 @@ const OrganizerDashboard = () => {
           {activeTab === 'dashboard' && user && (
             <div className="space-y-8">
               <OrganizerStats userId={user.id} />
-              <ActionRequiredCards userId={user.id} onActionCompleted={fetchOrganizerReservations} />
+              <ActionRequiredCards userId={user.id} onActionCompleted={() => fetchMyReservations(user.id)} />
               <TodayMeetingTimeline userId={user.id} />
-              <QuickBookingWizard userId={user.id} onBookingCreated={fetchOrganizerReservations} />
+              <QuickBookingWizard userId={user.id} onBookingCreated={() => fetchMyReservations(user.id)} />
             </div>
           )}
 
