@@ -6,6 +6,9 @@ import CalendarView from '../components/CalendarView';
 import NotificationBell from '../components/NotificationBell';
 import OrganizerStats from '../components/OrganizerStats';
 import FeedbackModal from '../components/FeedbackModal';
+import TodayMeetingTimeline from '../components/TodayMeetingTimeline';
+import QuickBookingWizard from '../components/QuickBookingWizard';
+import ActionRequiredCards from '../components/ActionRequiredCards';
 
 const OrganizerDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -194,7 +197,12 @@ const OrganizerDashboard = () => {
 
         <main className="p-4 md:p-8 max-w-5xl mx-auto flex-1 w-full">
           {activeTab === 'dashboard' && user && (
-            <OrganizerStats userId={user.id} />
+            <div className="space-y-8">
+              <OrganizerStats userId={user.id} />
+              <ActionRequiredCards userId={user.id} onActionCompleted={fetchOrganizerReservations} />
+              <TodayMeetingTimeline userId={user.id} />
+              <QuickBookingWizard userId={user.id} onBookingCreated={fetchOrganizerReservations} />
+            </div>
           )}
 
           {activeTab === 'calendar' && <CalendarView />}
