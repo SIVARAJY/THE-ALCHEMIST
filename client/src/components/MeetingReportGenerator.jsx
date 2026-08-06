@@ -16,6 +16,7 @@ const MeetingReportGenerator = () => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedOrganizer, setSelectedOrganizer] = useState('all');
 
   const [meetingsData, setMeetingsData] = useState([]);
   const [filteredMeetings, setFilteredMeetings] = useState([]);
@@ -27,7 +28,7 @@ const MeetingReportGenerator = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [reportType, fromDate, toDate, singleDate, selectedMonth, statusFilter, meetingsData]);
+  }, [reportType, fromDate, toDate, singleDate, selectedMonth, statusFilter, selectedOrganizer, meetingsData]);
 
   const fetchReportData = async () => {
     setLoading(true);
@@ -64,8 +65,22 @@ const MeetingReportGenerator = () => {
       result = result.filter(m => m.status === statusFilter);
     }
 
+    // Filter by Specific Organizer
+    if (selectedOrganizer !== 'all') {
+      result = result.filter(m => m.organizer_id === selectedOrganizer || m.profiles?.id === selectedOrganizer);
+    }
+
     setFilteredMeetings(result);
   };
+
+  // Extract unique organizers for selector dropdown
+  const uniqueOrganizers = Array.from(
+    new Map(
+      meetingsData
+        .filter(m => m.profiles?.id)
+        .map(m => [m.profiles.id, { id: m.profiles.id, name: m.profiles.name, email: m.profiles.email }])
+    ).values()
+  );
 
   // CSV Export Handler
   const exportToCSV = () => {
@@ -261,7 +276,7 @@ const MeetingReportGenerator = () => {
       </div>
 
       {/* Filter Controls Panel */}
-      <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+      <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-100 grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
         {/* Filter Type Selector */}
         <div>
           <label className="block text-xs font-semibold text-slate-600 mb-1">Report Mode</label>
@@ -323,6 +338,23 @@ const MeetingReportGenerator = () => {
             />
           </div>
         )}
+
+        {/* Filter by Specific Organizer */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1">Filter by Organizer</label>
+          <select
+            value={selectedOrganizer}
+            onChange={e => setSelectedOrganizer(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 truncate"
+          >
+            <option value="all">All Organizers</option>
+            {uniqueOrganizers.map(org => (
+              <option key={org.id} value={org.id}>
+                {org.name} ({org.email})
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Status Filter */}
         <div>
