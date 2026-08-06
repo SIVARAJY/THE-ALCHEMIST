@@ -5,6 +5,8 @@ import api from '../api';
 import NotificationBell from '../components/NotificationBell';
 import AttendeeStats from '../components/AttendeeStats';
 import FeedbackModal from '../components/FeedbackModal';
+import AttendeeTodayAgenda from '../components/AttendeeTodayAgenda';
+import QuickRSVPCards from '../components/QuickRSVPCards';
 
 const AttendeeDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -126,7 +128,11 @@ const AttendeeDashboard = () => {
 
         <main className="p-4 md:p-8 max-w-5xl mx-auto flex-1 w-full">
           {activeTab === 'dashboard' && user && (
-            <AttendeeStats userId={user.id} />
+            <div className="space-y-8">
+              <AttendeeStats userId={user.id} />
+              <QuickRSVPCards invitations={invitations} onRSVP={handleRSVP} />
+              <AttendeeTodayAgenda invitations={invitations} />
+            </div>
           )}
 
           {activeTab === 'invitations' && (
