@@ -8,8 +8,8 @@ router.get('/', async (req, res) => {
     const { data, error } = await supabase.from('feedback')
       .select(`
         *,
-        profiles!user_id(name, email),
-        reservations!reservation_id(date, start_time, end_time, rooms!room_id(name), meetings(title))
+        profiles (name, email),
+        reservations (date, start_time, end_time, rooms (name), meetings (title))
       `)
       .order('created_at', { ascending: false });
       

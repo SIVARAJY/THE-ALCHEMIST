@@ -67,3 +67,53 @@ CREATE TABLE attendees (
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Feedback table
+CREATE TABLE IF NOT EXISTS feedback (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  reservation_id UUID REFERENCES reservations(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  role TEXT,
+  rating_room INT CHECK (rating_room >= 1 AND rating_room <= 5),
+  rating_resources INT CHECK (rating_resources >= 1 AND rating_resources <= 5),
+  rating_meeting INT CHECK (rating_meeting >= 1 AND rating_meeting <= 5),
+  rating_overall INT CHECK (rating_overall >= 1 AND rating_overall <= 5),
+  comments TEXT,
+  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(reservation_id, user_id)
+);
+
+-- Audit Logs table
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  details TEXT,
+  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- System Policies table
+CREATE TABLE IF NOT EXISTS policies (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  description TEXT,
+  updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+INSERT INTO policies (key, value, description) VALUES
+  ('working_hours_start', '08:45', 'Official campus operating start time'),
+  ('working_hours_end', '16:30', 'Official campus operating end time'),
+  ('max_bookings_per_user', '5', 'Maximum active reservations per organizer'),
+  ('cancellation_deadline_hours', '24', 'Minimum hours before meeting to cancel'),
+  ('faculty_priority', 'enabled', 'Give faculty priority for room conflicts')
+ON CONFLICT (key) DO NOTHING;
+
+-- Notifications table
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  type TEXT DEFAULT 'info',
+  is_read BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
