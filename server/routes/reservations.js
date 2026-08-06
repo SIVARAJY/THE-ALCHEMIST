@@ -118,14 +118,16 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: `Booking end time cannot be after working hours (${whEnd}).` });
     }
 
-    // Max Bookings Per User Check
-    const maxBookings = parseInt(policies.max_bookings_per_user) || 5;
+    // Max Bookings Per User Check (Upcoming active bookings)
+    const maxBookings = parseInt(policies.max_bookings_per_user) || 20;
+    const today = new Date().toISOString().split('T')[0];
     const { count: activeBookings } = await supabase.from('reservations')
       .select('*', { count: 'exact', head: true })
       .eq('organizer_id', organizer_id)
+      .gte('date', today)
       .in('status', ['approved', 'pending']);
     if (activeBookings >= maxBookings) {
-      return res.status(400).json({ error: `You have reached the maximum of ${maxBookings} active bookings.` });
+      return res.status(400).json({ error: `You have reached the maximum of ${maxBookings} active upcoming bookings.` });
     }
 
     // --- Validation 1 & 2: Time Conflict & Duplicate Reservation ---
