@@ -19,11 +19,13 @@ const MeetingReportGenerator = () => {
   const [selectedOrganizer, setSelectedOrganizer] = useState('all');
 
   const [meetingsData, setMeetingsData] = useState([]);
+  const [organizersList, setOrganizersList] = useState([]);
   const [filteredMeetings, setFilteredMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchReportData();
+    fetchOrganizers();
   }, []);
 
   useEffect(() => {
@@ -39,6 +41,16 @@ const MeetingReportGenerator = () => {
       console.error('Failed to fetch reservations for report:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchOrganizers = async () => {
+    try {
+      const res = await api.get('/users');
+      const orgs = (res.data || []).filter(u => u.role === 'Organizer' || u.role === 'Admin');
+      setOrganizersList(orgs);
+    } catch (err) {
+      console.error('Failed to fetch organizers list:', err);
     }
   };
 
@@ -73,14 +85,17 @@ const MeetingReportGenerator = () => {
     setFilteredMeetings(result);
   };
 
-  // Extract unique organizers for selector dropdown
-  const uniqueOrganizers = Array.from(
-    new Map(
-      meetingsData
-        .filter(m => m.profiles?.id)
-        .map(m => [m.profiles.id, { id: m.profiles.id, name: m.profiles.name, email: m.profiles.email }])
-    ).values()
-  );
+  // Combine registered organizers + organizers from reservation history
+  const organizerMap = new Map();
+  organizersList.forEach(u => {
+    organizerMap.set(u.id, { id: u.id, name: u.name || u.email, email: u.email });
+  });
+  meetingsData.forEach(m => {
+    if (m.profiles?.id && !organizerMap.has(m.profiles.id)) {
+      organizerMap.set(m.profiles.id, { id: m.profiles.id, name: m.profiles.name || m.profiles.email, email: m.profiles.email });
+    }
+  });
+  const allOrganizers = Array.from(organizerMap.values());
 
   // CSV Export Handler
   const exportToCSV = () => {
@@ -347,8 +362,8 @@ const MeetingReportGenerator = () => {
             onChange={e => setSelectedOrganizer(e.target.value)}
             className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 truncate"
           >
-            <option value="all">All Organizers</option>
-            {uniqueOrganizers.map(org => (
+            <option value="all">All Organizers ({allOrganizers.length})</option>
+            {allOrganizers.map(org => (
               <option key={org.id} value={org.id}>
                 {org.name} ({org.email})
               </option>
