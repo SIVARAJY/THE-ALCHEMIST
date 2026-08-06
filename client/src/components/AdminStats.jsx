@@ -74,51 +74,6 @@ const AdminStats = () => {
         </div>
       </div>
 
-      {/* Secondary Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-8 rounded-3xl shadow-lg text-white flex flex-col justify-center">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-indigo-50">Active Users</h3>
-            <Users className="w-8 h-8 text-indigo-200 opacity-80" />
-          </div>
-          <p className="text-5xl font-black mb-2">{stats.activeUsers}</p>
-          <p className="text-indigo-100 text-sm">Registered across the system</p>
-        </div>
-
-        <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-100 p-6 overflow-hidden">
-          <div className="flex items-center mb-6">
-            <History className="w-5 h-5 text-indigo-500 mr-2" />
-            <h3 className="text-lg font-bold text-slate-800">Recent Reservations</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <tbody className="divide-y divide-slate-50">
-                {stats.recentReservations?.map(res => (
-                  <tr key={res.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3 px-2 font-medium text-slate-800">{res.profiles?.name}</td>
-                    <td className="py-3 px-2 text-slate-500">{res.rooms?.name}</td>
-                    <td className="py-3 px-2 text-slate-500 text-sm">{new Date(res.date).toLocaleDateString()}</td>
-                    <td className="py-3 px-2 text-right">
-                      <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        res.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                        res.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                        res.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                        'bg-blue-100 text-blue-700'
-                      }`}>
-                        {res.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-                {(!stats.recentReservations || stats.recentReservations.length === 0) && (
-                  <tr><td colSpan="4" className="py-4 text-center text-slate-400">No recent reservations</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
       {/* Live Real-Time Activity Stream Feed */}
       <LiveActivityFeed />
     </div>
