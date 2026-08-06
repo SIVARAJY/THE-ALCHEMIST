@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar as CalendarIcon, Search, CheckCircle, Clock, XCircle, LogOut, Plus, CalendarDays, AlertCircle, Menu, LayoutDashboard } from 'lucide-react';
+import { Calendar as CalendarIcon, Search, CheckCircle, Clock, XCircle, LogOut, Plus, CalendarDays, AlertCircle, Menu, LayoutDashboard, Star } from 'lucide-react';
 import api from '../api';
 import CalendarView from '../components/CalendarView';
 import NotificationBell from '../components/NotificationBell';
@@ -230,8 +230,15 @@ const OrganizerDashboard = () => {
               {searched && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {availableRooms.map(room => (
-                    <div key={room.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-                      <h3 className="text-lg font-bold text-slate-800 mb-1">{room.name}</h3>
+                    <div key={room.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col hover:border-indigo-200 transition-all">
+                      <div className="flex justify-between items-start mb-1 gap-2">
+                        <h3 className="text-lg font-bold text-slate-800">{room.name}</h3>
+                        <div className="flex items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-700 px-2.5 py-1 rounded-full text-xs font-semibold shrink-0">
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                          <span>{room.avg_rating ? `${room.avg_rating} / 5` : 'New'}</span>
+                          {room.review_count > 0 && <span className="text-slate-400 text-[10px]">({room.review_count})</span>}
+                        </div>
+                      </div>
                       <p className="text-slate-500 text-sm mb-4">{room.location} • Floor {room.floor}</p>
                       <div className="flex justify-between items-center mt-auto">
                         <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-semibold">{room.capacity} Seats</span>
@@ -258,9 +265,15 @@ const OrganizerDashboard = () => {
                 <button onClick={() => setSelectedRoom(null)} className="text-slate-400 hover:text-slate-600">Cancel</button>
               </div>
               
-              <div className="bg-slate-50 p-4 rounded-xl mb-6">
-                <p className="font-semibold text-slate-700">{selectedRoom.name}</p>
-                <p className="text-sm text-slate-500">{searchParams.date} | {searchParams.startTime} - {searchParams.endTime}</p>
+              <div className="bg-slate-50 p-4 rounded-xl mb-6 flex justify-between items-center">
+                <div>
+                  <p className="font-semibold text-slate-700">{selectedRoom.name}</p>
+                  <p className="text-sm text-slate-500">{searchParams.date} | {searchParams.startTime} - {searchParams.endTime}</p>
+                </div>
+                <div className="flex items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-700 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0">
+                  <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                  <span>{selectedRoom.avg_rating ? `${selectedRoom.avg_rating} / 5 Rating` : 'No ratings yet'}</span>
+                </div>
               </div>
 
               <form onSubmit={handleBook} className="space-y-6">

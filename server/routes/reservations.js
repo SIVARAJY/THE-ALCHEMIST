@@ -67,7 +67,35 @@ router.get('/available-rooms', async (req, res) => {
     }).map(r => r.room_id);
 
     const availableRooms = rooms.filter(room => !bookedRoomIds.includes(room.id));
-    res.json(availableRooms);
+
+    // Fetch ratings for available rooms
+    const { data: feedbackData } = await supabase.from('feedback')
+      .select('rating_room, rating_overall, reservations(room_id)');
+
+    const roomRatingsMap = {};
+    if (feedbackData && feedbackData.length > 0) {
+      feedbackData.forEach(f => {
+        const roomId = f.reservations?.room_id;
+        const rating = f.rating_room || f.rating_overall;
+        if (roomId && rating) {
+          if (!roomRatingsMap[roomId]) roomRatingsMap[roomId] = { total: 0, count: 0 };
+          roomRatingsMap[roomId].total += Number(rating);
+          roomRatingsMap[roomId].count += 1;
+        }
+      });
+    }
+
+    const availableRoomsWithRatings = availableRooms.map(room => {
+      const stats = roomRatingsMap[room.id];
+      const avg = stats && stats.count > 0 ? (stats.total / stats.count).toFixed(1) : null;
+      return {
+        ...room,
+        avg_rating: avg ? parseFloat(avg) : null,
+        review_count: stats ? stats.count : 0
+      };
+    });
+
+    res.json(availableRoomsWithRatings);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
