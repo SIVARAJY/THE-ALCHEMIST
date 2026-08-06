@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Building, Monitor, Calendar, Users, Clock, History } from 'lucide-react';
 import api from '../api';
 import LiveActivityFeed from './LiveActivityFeed';
+import CampusLiveOccupancyBar from './CampusLiveOccupancyBar';
 
 const AdminStats = () => {
   const [stats, setStats] = useState(null);
@@ -73,6 +74,14 @@ const AdminStats = () => {
           </div>
         </div>
       </div>
+
+      {/* Campus Live Occupancy Bar Gauge */}
+      <CampusLiveOccupancyBar
+        totalRooms={stats.totalRooms || 0}
+        activeTodayRooms={stats.activeTodayRooms || 0}
+        occupancyPercentage={stats.occupancyPercentage || 0}
+        occupiedRightNow={stats.occupiedRightNow || 0}
+      />
 
       {/* Live Real-Time Activity Stream Feed */}
       <LiveActivityFeed />
