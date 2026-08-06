@@ -6,7 +6,7 @@ const supabase = require('../supabaseClient');
 router.get('/user/:userId', async (req, res) => {
   try {
     const { data, error } = await supabase.from('attendees')
-      .select('*, meetings(title, reservations(id, date, start_time, end_time, rooms(name, location, floor), profiles!organizer_id(name, email)))')
+      .select('*, meetings(title, minutes_of_meeting, mom_submitted_at, reservations(id, date, start_time, end_time, description, venue_change_status, rooms!room_id(name, location, floor), profiles!organizer_id(name, email)))')
       .eq('user_id', req.params.userId);
     if (error) throw error;
     res.json(data);

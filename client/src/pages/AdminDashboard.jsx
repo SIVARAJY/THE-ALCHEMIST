@@ -186,6 +186,16 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleVenueChangeApproval = async (resId, status) => {
+    try {
+      await api.put(`/reservations/${resId}/venue-change-approve`, { status });
+      alert(`Venue change request ${status}!`);
+      fetchData();
+    } catch (e) {
+      alert(e.response?.data?.error || 'Failed to update venue change status');
+    }
+  };
+
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
@@ -597,7 +607,15 @@ const AdminDashboard = () => {
                           </td>
                           <td className="px-6 py-4 text-slate-600">
                             <p className="font-semibold text-slate-800">{res.rooms?.name || 'N/A'}</p>
-                            <p className="text-xs text-slate-400">{res.meetings?.[0]?.title || 'Untitled Meeting'}</p>
+                            <p className="text-xs text-slate-400">{res.meetings?.[0]?.title || res.meetings?.title || 'Untitled Meeting'}</p>
+                            {res.description && <p className="text-[11px] text-slate-500 mt-1 italic">{res.description}</p>}
+                            {res.venue_change_status === 'pending' && (
+                              <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+                                <strong>Requested Venue:</strong> {res.requested_room?.name || 'New Room'}
+                                <br />
+                                <strong>Reason:</strong> "{res.venue_change_reason || 'No reason provided'}"
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-slate-600">
                             <p className="font-medium text-sm text-slate-800">{new Date(res.date).toLocaleDateString()}</p>
@@ -612,9 +630,27 @@ const AdminDashboard = () => {
                             }`}>
                               {res.status.replace('_', ' ')}
                             </span>
+                            {res.venue_change_status === 'pending' && (
+                              <div className="mt-1 font-bold text-[10px] text-amber-700 uppercase">Venue Change Pending</div>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-right space-x-2">
-                            {requestingModFor === res.id ? (
+                            {res.venue_change_status === 'pending' ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => handleVenueChangeApproval(res.id, 'approved')}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded text-xs font-bold transition"
+                                >
+                                  Approve Venue Change
+                                </button>
+                                <button
+                                  onClick={() => handleVenueChangeApproval(res.id, 'rejected')}
+                                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-bold transition"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            ) : requestingModFor === res.id ? (
                               <div className="flex flex-col items-end space-y-2 mt-2">
                                 <input 
                                   type="text" 

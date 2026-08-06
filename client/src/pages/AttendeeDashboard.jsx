@@ -67,6 +67,8 @@ const AttendeeDashboard = () => {
     navigate('/login');
   };
 
+  const [viewingMom, setViewingMom] = useState(null);
+
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
       {/* Mobile Backdrop */}
@@ -111,6 +113,7 @@ const AttendeeDashboard = () => {
         </div>
       </div>
 
+      {/* Main Content */}
       <div className="flex-1 overflow-auto bg-slate-50/50 flex flex-col">
         <header className="bg-white border-b border-slate-200 px-4 md:px-8 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-3">
@@ -141,6 +144,7 @@ const AttendeeDashboard = () => {
                     const meeting = inv.meetings;
                     const res = meeting?.reservations;
                     const room = res?.rooms;
+                    const organizer = res?.profiles;
                     
                     // Check if meeting has ended
                     let isPast = false;
@@ -151,18 +155,44 @@ const AttendeeDashboard = () => {
                       }
                     }
                     const hasReviewed = reviewedResIds.includes(res?.id);
+                    const hasMom = Boolean(meeting?.minutes_of_meeting);
 
                     return (
-                        <div key={inv.id} className={`bg-white p-6 rounded-2xl shadow-sm border flex items-center justify-between ${isPast ? 'border-slate-200 bg-slate-50 opacity-90' : 'border-slate-100'}`}>
-                            <div>
-                                <h3 className={`text-xl font-bold mb-2 ${isPast ? 'text-slate-600' : 'text-slate-800'}`}>{meeting?.title || 'Untitled Meeting'}</h3>
-                                <div className="flex space-x-6 text-sm text-slate-500">
-                                    <span className="flex items-center"><CalendarIcon className="w-4 h-4 mr-2 text-indigo-500"/> {new Date(res?.date).toLocaleDateString()}</span>
-                                    <span className="flex items-center"><Clock className="w-4 h-4 mr-2 text-indigo-500"/> {res?.start_time} - {res?.end_time}</span>
-                                    <span className="flex items-center"><MapPin className="w-4 h-4 mr-2 text-indigo-500"/> {room?.name} ({room?.location})</span>
+                        <div key={inv.id} className={`bg-white p-6 rounded-2xl shadow-sm border flex flex-col md:flex-row md:items-center justify-between gap-4 ${isPast ? 'border-slate-200 bg-slate-50 opacity-95' : 'border-slate-100'}`}>
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <h3 className={`text-xl font-bold ${isPast ? 'text-slate-700' : 'text-slate-800'}`}>{meeting?.title || 'Untitled Meeting'}</h3>
+                                  {res?.venue_change_status === 'approved' && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase">
+                                      Venue Updated
+                                    </span>
+                                  )}
+                                </div>
+
+                                {res?.description && (
+                                  <p className="text-xs text-slate-600 bg-slate-100/70 p-2.5 rounded-xl border border-slate-200/50 max-w-xl">
+                                    <strong>Agenda:</strong> {res.description}
+                                  </p>
+                                )}
+
+                                <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
+                                    <span className="flex items-center"><CalendarIcon className="w-4 h-4 mr-1.5 text-indigo-500"/> {new Date(res?.date).toLocaleDateString()}</span>
+                                    <span className="flex items-center"><Clock className="w-4 h-4 mr-1.5 text-indigo-500"/> {res?.start_time} - {res?.end_time}</span>
+                                    <span className="flex items-center"><MapPin className="w-4 h-4 mr-1.5 text-rose-500"/> {room?.name} ({room?.location})</span>
+                                    {organizer?.name && <span className="text-xs font-semibold text-slate-700">By: {organizer.name}</span>}
                                 </div>
                             </div>
-                            <div className="flex space-x-3 items-center">
+
+                            <div className="flex flex-wrap space-x-3 items-center shrink-0">
+                                {hasMom && (
+                                  <button
+                                    onClick={() => setViewingMom({ title: meeting.title, mom: meeting.minutes_of_meeting, date: res?.date })}
+                                    className="bg-purple-100 hover:bg-purple-200 text-purple-800 border border-purple-200 px-4 py-2 rounded-xl text-xs font-bold transition"
+                                  >
+                                    View MoM Notes
+                                  </button>
+                                )}
+
                                 {isPast && inv.status === 'accepted' ? (
                                     hasReviewed ? (
                                         <span className="text-sm font-semibold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-xl">Feedback Submitted</span>
@@ -204,6 +234,29 @@ const AttendeeDashboard = () => {
                         You have no meeting invitations.
                     </div>
                 )}
+            </div>
+          )}
+
+          {/* MoM Viewer Modal */}
+          {viewingMom && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">Minutes of Meeting (MoM)</h3>
+                    <p className="text-xs text-slate-500">{viewingMom.title} ({viewingMom.date})</p>
+                  </div>
+                  <button onClick={() => setViewingMom(null)} className="text-slate-400 hover:text-slate-600"><XCircle className="w-5 h-5"/></button>
+                </div>
+
+                <div className="bg-purple-50/60 border border-purple-100 p-4 rounded-2xl text-slate-800 text-sm whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
+                  {viewingMom.mom}
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button onClick={() => setViewingMom(null)} className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md">Close</button>
+                </div>
+              </div>
             </div>
           )}
 

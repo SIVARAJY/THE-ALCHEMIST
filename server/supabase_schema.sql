@@ -117,3 +117,12 @@ CREATE TABLE IF NOT EXISTS notifications (
   is_read BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Schema Additions for MoM, Meeting Description, & Venue Change Requests
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS requested_room_id UUID REFERENCES rooms(id);
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS venue_change_status TEXT;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS venue_change_reason TEXT;
+
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS minutes_of_meeting TEXT;
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS mom_submitted_at TIMESTAMPTZ;

@@ -103,7 +103,7 @@ router.get('/available-rooms', async (req, res) => {
 
 // Create a new reservation request (Organizer)
 router.post('/', async (req, res) => {
-  const { organizer_id, room_id, date, start_time, end_time, title, resources, attendees } = req.body;
+  const { organizer_id, room_id, date, start_time, end_time, title, description, resources, attendees } = req.body;
   try {
     // --- Policy Enforcement ---
     const policies = await getPoliciesMap();
@@ -142,14 +142,10 @@ router.post('/', async (req, res) => {
     });
     
     if (hasConflict) {
-      // Faculty priority check
-      const facultyPriority = policies.faculty_priority === 'true';
-      if (facultyPriority) {
-        const { data: orgProfile } = await supabase.from('profiles').select('category').eq('id', organizer_id).single();
-        if (orgProfile?.category === 'faculty') {
-          // Faculty gets a special flag; admin will see priority badge
-          // Don't block, but mark the reservation with a priority note
-          // (We still block here since the room IS taken; admin resolves conflicts)
+      const { data: orgProfile } = await supabase.from('profiles').select('role, category').eq('id', organizer_id).single();
+      if (orgProfile && orgProfile.category === 'faculty') {
+        const priorityEnabled = policies.faculty_priority !== 'disabled';
+        if (priorityEnabled) {
           return res.status(400).json({ error: 'Room is already booked for the selected time slot. As a faculty member, your request has been flagged as priority — please contact the Admin.' });
         }
       }
@@ -196,7 +192,7 @@ router.post('/', async (req, res) => {
 
     // --- Create Reservation ---
     const { data: reservation, error: resError } = await supabase.from('reservations')
-      .insert([{ organizer_id, room_id, date, start_time, end_time }]).select().single();
+      .insert([{ organizer_id, room_id, date, start_time, end_time, description }]).select().single();
     if (resError) throw resError;
 
     // Add requested resources
@@ -240,7 +236,7 @@ router.post('/', async (req, res) => {
 router.get('/organizer/:id', async (req, res) => {
   try {
     const { data, error } = await supabase.from('reservations')
-      .select('*, rooms(name, location), meetings(title)')
+      .select('*, rooms!room_id(name, location, floor), requested_room:rooms!requested_room_id(name, location, floor), meetings(id, title, minutes_of_meeting, mom_submitted_at)')
       .eq('organizer_id', req.params.id)
       .order('date', { ascending: false });
     if (error) throw error;
@@ -254,7 +250,7 @@ router.get('/organizer/:id', async (req, res) => {
 router.get('/pending', async (req, res) => {
   try {
     const { data, error } = await supabase.from('reservations')
-      .select('*, profiles(name, email, category), rooms(name, location), meetings(id, title)')
+      .select('*, profiles(name, email, category), rooms!room_id(name, location, floor), requested_room:rooms!requested_room_id(name, location, floor), meetings(id, title)')
       .eq('status', 'pending');
     if (error) throw error;
     res.json(data);
@@ -268,7 +264,7 @@ router.get('/', async (req, res) => {
   try {
     const { status } = req.query;
     let query = supabase.from('reservations')
-      .select('*, profiles(name, email, category), rooms(name, location), meetings(id, title)')
+      .select('*, profiles(name, email, category), rooms!room_id(name, location, floor), requested_room:rooms!requested_room_id(name, location, floor), meetings(id, title, minutes_of_meeting, mom_submitted_at)')
       .order('date', { ascending: false });
     if (status && status !== 'all') {
       query = query.eq('status', status);
@@ -276,6 +272,106 @@ router.get('/', async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
     res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Organizer requests a venue/room change
+router.post('/:id/venue-change-request', async (req, res) => {
+  const { requested_room_id, reason } = req.body;
+  try {
+    const { data, error } = await supabase.from('reservations')
+      .update({
+        requested_room_id,
+        venue_change_reason: reason,
+        venue_change_status: 'pending'
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    notifyAdmins(`Venue change requested for booking ID ${req.params.id}`, 'request');
+    logAudit(data.organizer_id, 'VENUE_CHANGE_REQUESTED', `Venue change requested to room ID ${requested_room_id}`);
+
+    res.json({ message: 'Venue change request submitted to Admin for approval', reservation: data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin approves or rejects a venue change request
+router.put('/:id/venue-change-approve', async (req, res) => {
+  const { status, admin_notes } = req.body; // 'approved' or 'rejected'
+  try {
+    const { data: currentRes, error: fetchErr } = await supabase.from('reservations')
+      .select('*, meetings(id, title)')
+      .eq('id', req.params.id)
+      .single();
+
+    if (fetchErr) throw fetchErr;
+
+    let updateData = { venue_change_status: status };
+    if (admin_notes) updateData.admin_notes = admin_notes;
+
+    if (status === 'approved' && currentRes.requested_room_id) {
+      updateData.room_id = currentRes.requested_room_id;
+    }
+
+    const { data: updatedRes, error: updateErr } = await supabase.from('reservations')
+      .update(updateData)
+      .eq('id', req.params.id)
+      .select('*, rooms(name, location)')
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    const title = currentRes.meetings?.[0]?.title || 'Meeting';
+    const roomName = updatedRes.rooms?.name || 'New Room';
+
+    if (status === 'approved') {
+      notifyUser(currentRes.organizer_id, `Venue change APPROVED! Meeting "${title}" moved to ${roomName}.`, 'success');
+      notifyAttendees(req.params.id, `Venue Updated: Meeting "${title}" is now held at ${roomName}.`, 'info');
+      logAudit(currentRes.organizer_id, 'VENUE_CHANGE_APPROVED', `Venue change approved to ${roomName}`);
+    } else {
+      notifyUser(currentRes.organizer_id, `Venue change request for "${title}" was REJECTED by Admin.`, 'warning');
+      logAudit(currentRes.organizer_id, 'VENUE_CHANGE_REJECTED', `Venue change request rejected`);
+    }
+
+    res.json({ message: `Venue change request ${status}`, reservation: updatedRes });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Organizer submits Minutes of Meeting (MoM)
+router.post('/:id/mom', async (req, res) => {
+  const { minutes_of_meeting } = req.body;
+  try {
+    const { data: meeting, error: fetchErr } = await supabase.from('meetings')
+      .select('id, title, reservation_id, reservations(organizer_id)')
+      .eq('reservation_id', req.params.id)
+      .single();
+
+    if (fetchErr) throw fetchErr;
+
+    const { data: updatedMeeting, error: updateErr } = await supabase.from('meetings')
+      .update({
+        minutes_of_meeting,
+        mom_submitted_at: new Date()
+      })
+      .eq('id', meeting.id)
+      .select()
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    notifyAttendees(req.params.id, `Minutes of Meeting (MoM) posted for "${meeting.title}".`, 'info');
+    logAudit(meeting.reservations?.organizer_id, 'MOM_SUBMITTED', `MoM submitted for meeting "${meeting.title}"`);
+
+    res.json({ message: 'Minutes of Meeting (MoM) saved successfully', meeting: updatedMeeting });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -21,12 +21,21 @@ const OrganizerDashboard = () => {
   const [searched, setSearched] = useState(false);
 
   const [selectedRoom, setSelectedRoom] = useState(null);
-  const [bookingForm, setBookingForm] = useState({ title: '', attendees: '', resources: [] });
+  const [bookingForm, setBookingForm] = useState({ title: '', description: '', attendees: '', resources: [] });
   const [allResources, setAllResources] = useState([]);
   
   const [myReservations, setMyReservations] = useState([]);
   const [reviewedResIds, setReviewedResIds] = useState([]);
   const [feedbackFor, setFeedbackFor] = useState(null);
+
+  // Venue Change State
+  const [venueChangeRes, setVenueChangeRes] = useState(null);
+  const [requestedRoomId, setRequestedRoomId] = useState('');
+  const [venueChangeReason, setVenueChangeReason] = useState('');
+
+  // MoM State
+  const [momRes, setMomRes] = useState(null);
+  const [minutesText, setMinutesText] = useState('');
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -96,17 +105,50 @@ const OrganizerDashboard = () => {
         start_time: searchParams.startTime,
         end_time: searchParams.endTime,
         title: bookingForm.title,
+        description: bookingForm.description,
         resources: bookingForm.resources,
         attendees: bookingForm.attendees
       });
       alert('Reservation submitted for approval!');
       setSelectedRoom(null);
-      setBookingForm({ title: '', attendees: '', resources: [] });
+      setBookingForm({ title: '', description: '', attendees: '', resources: [] });
       fetchMyReservations(user.id);
       setActiveTab('my-reservations');
     } catch (error) {
       console.error(error);
       alert(error.response?.data?.error || 'Failed to book room');
+    }
+  };
+
+  const handleVenueChangeSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post(`/reservations/${venueChangeRes.id}/venue-change-request`, {
+        requested_room_id: requestedRoomId,
+        reason: venueChangeReason
+      });
+      alert('Venue change request submitted to Admin for approval!');
+      setVenueChangeRes(null);
+      setRequestedRoomId('');
+      setVenueChangeReason('');
+      fetchMyReservations(user.id);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to request venue change');
+    }
+  };
+
+  const handleMomSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post(`/reservations/${momRes.id}/mom`, {
+        minutes_of_meeting: minutesText
+      });
+      alert('Minutes of Meeting (MoM) saved successfully!');
+      setMomRes(null);
+      setMinutesText('');
+      fetchMyReservations(user.id);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to save Minutes of Meeting');
     }
   };
 
@@ -289,10 +331,15 @@ const OrganizerDashboard = () => {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Meeting Title</label>
                   <input type="text" className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" value={bookingForm.title} onChange={e => setBookingForm({...bookingForm, title: e.target.value})} required />
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Meeting Description / Agenda</label>
+                  <textarea className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" rows="3" placeholder="Briefly describe the meeting purpose and agenda (seen by invited attendees)..." value={bookingForm.description} onChange={e => setBookingForm({...bookingForm, description: e.target.value})}></textarea>
+                </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Invite Attendees (Emails separated by comma)</label>
-                  <textarea className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" rows="2" placeholder="alice@college.edu, bob@college.edu" value={bookingForm.attendees} onChange={e => setBookingForm({...bookingForm, attendees: e.target.value})}></textarea>
+                  <textarea className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" rows="2" placeholder="alice@college.edu, bob@college.edu" value={bookingForm.attendees} onChange={e => setBookingForm({...bookingForm, attendees: e.target.value})}></textarea>
                 </div>
 
                 <div>
@@ -325,10 +372,10 @@ const OrganizerDashboard = () => {
               <table className="w-full text-left">
                 <thead className="bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-600">
                   <tr>
-                    <th className="px-6 py-4">Meeting Title</th>
-                    <th className="px-6 py-4">Room</th>
+                    <th className="px-6 py-4">Meeting Details</th>
+                    <th className="px-6 py-4">Room & Venue</th>
                     <th className="px-6 py-4">Date & Time</th>
-                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Status & Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -339,28 +386,78 @@ const OrganizerDashboard = () => {
                       if (endTime < new Date()) isPast = true;
                     }
                     const hasReviewed = reviewedResIds.includes(res.id);
+                    const meetingObj = res.meetings?.[0] || res.meetings || {};
+                    const hasMom = Boolean(meetingObj.minutes_of_meeting);
 
                     return (
                     <React.Fragment key={res.id}>
                     <tr className={`transition-colors ${isPast ? 'bg-slate-50/50' : 'hover:bg-slate-50'}`}>
-                      <td className="px-6 py-4 font-medium text-slate-800">{res.meetings?.[0]?.title}</td>
-                      <td className="px-6 py-4 text-slate-600">{res.rooms?.name}</td>
-                      <td className="px-6 py-4 text-slate-600">
-                        <p>{new Date(res.date).toLocaleDateString()}</p>
-                        <p className="text-xs">{res.start_time} - {res.end_time}</p>
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-slate-800 text-base">{meetingObj.title || 'Untitled Meeting'}</p>
+                        {res.description && <p className="text-xs text-slate-500 mt-1 max-w-xs truncate">{res.description}</p>}
                       </td>
-                      <td className="px-6 py-4 flex items-center space-x-3">
-                        {res.status === 'pending' && <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Clock className="w-3 h-3 mr-1"/> Pending</span>}
-                        {res.status === 'approved' && !isPast && <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700"><CheckCircle className="w-3 h-3 mr-1"/> Approved</span>}
-                        {res.status === 'rejected' && <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700"><XCircle className="w-3 h-3 mr-1"/> Rejected</span>}
-                        {res.status === 'modification_requested' && <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><AlertCircle className="w-3 h-3 mr-1"/> Modification Requested</span>}
-                        
+                      <td className="px-6 py-4 text-slate-600">
+                        <p className="font-semibold text-slate-700">{res.rooms?.name || 'Room'}</p>
+                        <p className="text-xs text-slate-400">{res.rooms?.location || ''} {res.rooms?.floor ? `(Floor ${res.rooms.floor})` : ''}</p>
+                        {res.venue_change_status === 'pending' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 mt-1">
+                            Venue Change Pending Approval
+                          </span>
+                        )}
+                        {res.venue_change_status === 'approved' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 mt-1">
+                            Venue Updated
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">
+                        <p className="font-medium text-slate-700">{new Date(res.date).toLocaleDateString()}</p>
+                        <p className="text-xs text-slate-400">{res.start_time} - {res.end_time}</p>
+                      </td>
+                      <td className="px-6 py-4 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {res.status === 'pending' && <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Clock className="w-3 h-3 mr-1"/> Pending</span>}
+                          {res.status === 'approved' && !isPast && <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700"><CheckCircle className="w-3 h-3 mr-1"/> Approved</span>}
+                          {res.status === 'rejected' && <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700"><XCircle className="w-3 h-3 mr-1"/> Rejected</span>}
+                          {res.status === 'modification_requested' && <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><AlertCircle className="w-3 h-3 mr-1"/> Modification Requested</span>}
+                        </div>
+
+                        {/* Venue Change Action for Upcoming Approved Bookings */}
+                        {res.status === 'approved' && !isPast && res.venue_change_status !== 'pending' && (
+                          <button
+                            onClick={() => {
+                              setVenueChangeRes(res);
+                              setRequestedRoomId(res.room_id);
+                            }}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-3 py-1 rounded-lg font-semibold transition"
+                          >
+                            Request Venue Change
+                          </button>
+                        )}
+
+                        {/* MoM & Feedback Actions for Completed Meetings */}
                         {isPast && res.status === 'approved' && (
-                           hasReviewed ? (
-                             <span className="text-xs font-semibold text-emerald-600">Feedback Submitted</span>
-                           ) : (
-                             <button onClick={() => setFeedbackFor(res.id)} className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded font-bold hover:bg-indigo-700 transition">Leave Feedback</button>
-                           )
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <button
+                              onClick={() => {
+                                setMomRes(res);
+                                setMinutesText(meetingObj.minutes_of_meeting || '');
+                              }}
+                              className={`text-xs px-3 py-1 rounded-lg font-bold transition ${
+                                hasMom
+                                  ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                  : 'bg-purple-600 text-white hover:bg-purple-700'
+                              }`}
+                            >
+                              {hasMom ? 'Edit MoM' : 'Submit MoM'}
+                            </button>
+
+                            {hasReviewed ? (
+                              <span className="text-xs font-semibold text-emerald-600">Feedback Submitted</span>
+                            ) : (
+                              <button onClick={() => setFeedbackFor(res.id)} className="bg-indigo-600 text-white text-xs px-3 py-1 rounded font-bold hover:bg-indigo-700 transition">Leave Feedback</button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -429,6 +526,85 @@ const OrganizerDashboard = () => {
                   <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                     <button type="button" onClick={() => setEditingRes(null)} className="px-6 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
                     <button type="submit" className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 font-bold shadow-md shadow-indigo-200 transition-colors">Resubmit Request</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Request Venue Change Modal */}
+          {venueChangeRes && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-lg font-bold text-slate-800">Request Venue Change</h3>
+                  <button onClick={() => setVenueChangeRes(null)} className="text-slate-400 hover:text-slate-600"><XCircle className="w-5 h-5"/></button>
+                </div>
+                <form onSubmit={handleVenueChangeSubmit} className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Current Venue</label>
+                    <p className="text-sm font-bold text-slate-800 bg-slate-100 p-2.5 rounded-xl">{venueChangeRes.rooms?.name} ({venueChangeRes.rooms?.location})</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Proposed New Venue / Room</label>
+                    <select
+                      value={requestedRoomId}
+                      onChange={e => setRequestedRoomId(e.target.value)}
+                      className="w-full p-2.5 border rounded-xl text-sm font-medium"
+                      required
+                    >
+                      <option value="">-- Select New Room --</option>
+                      {availableRooms.map(r => (
+                        <option key={r.id} value={r.id}>{r.name} ({r.location} - Cap: {r.capacity})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Reason for Venue Change Request</label>
+                    <textarea
+                      rows="3"
+                      placeholder="e.g. Higher attendee count expected, requiring a larger seminar hall..."
+                      value={venueChangeReason}
+                      onChange={e => setVenueChangeReason(e.target.value)}
+                      className="w-full p-2.5 border rounded-xl text-sm"
+                      required
+                    ></textarea>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setVenueChangeRes(null)} className="flex-1 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl">Cancel</button>
+                    <button type="submit" className="flex-1 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl shadow-md">Submit Request</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Submit Minutes of Meeting (MoM) Modal */}
+          {momRes && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-lg font-bold text-slate-800">Submit Minutes of Meeting (MoM)</h3>
+                  <button onClick={() => setMomRes(null)} className="text-slate-400 hover:text-slate-600"><XCircle className="w-5 h-5"/></button>
+                </div>
+                <form onSubmit={handleMomSubmit} className="space-y-3">
+                  <div>
+                    <p className="text-xs text-slate-500">Meeting: <strong>{momRes.meetings?.[0]?.title || momRes.meetings?.title}</strong> ({momRes.date})</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Minutes of Meeting (MoM) Notes & Action Items</label>
+                    <textarea
+                      rows="6"
+                      placeholder="Enter key takeaways, decisions made, action items, and next steps (accessible to all attendees)..."
+                      value={minutesText}
+                      onChange={e => setMinutesText(e.target.value)}
+                      className="w-full p-3 border rounded-xl text-sm"
+                      required
+                    ></textarea>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setMomRes(null)} className="flex-1 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl">Cancel</button>
+                    <button type="submit" className="flex-1 py-2 bg-purple-600 text-white font-bold text-xs rounded-xl shadow-md">Save & Publish MoM</button>
                   </div>
                 </form>
               </div>
