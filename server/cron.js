@@ -1,12 +1,10 @@
 const cron = require('node-cron');
 const supabase = require('./supabaseClient');
 
-// Run every minute to check for upcoming meetings
+// Run every minute to check for upcoming meeting reminders (1 hour before start)
 cron.schedule('* * * * *', async () => {
   try {
     const now = new Date();
-    // In local time to match database date strings if they are local
-    // Assuming date strings in DB are 'YYYY-MM-DD'
     const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
     
     const { data: reservations, error } = await supabase.from('reservations')
@@ -25,23 +23,23 @@ cron.schedule('* * * * *', async () => {
       
       const diffMinutes = (meetingTime - now) / 60000;
       
-      // If meeting is coming up in <= 15 mins (and hasn't passed)
-      if (diffMinutes > 0 && diffMinutes <= 15) {
+      // Trigger 1-Hour Reminder if meeting starts in 1 to 60 minutes
+      if (diffMinutes > 0 && diffMinutes <= 60) {
         const title = res.meetings[0].title || 'Meeting';
-        const reminderMsg = `Reminder: "${title}" starts in 15 minutes at ${res.rooms.name}. [ResID:${res.id}]`;
+        const orgReminderMsg = `⏰ Meeting Reminder: Your meeting "${title}" starts in 1 hour at ${res.rooms.name} (${res.start_time}). [ID:${res.id}]`;
+        const attReminderMsg = `⏰ Upcoming Meeting: "${title}" starts in 1 hour at ${res.rooms.name} (${res.start_time}). [ID:${res.id}]`;
         
-        // Notify Organizer
-        await sendReminderIfNotSent(res.organizer_id, reminderMsg);
+        // Notify Organizer 1 hour before meeting
+        await sendReminderIfNotSent(res.organizer_id, orgReminderMsg);
 
-        // Notify Accepted Attendees
+        // Notify All Invited & Accepted Attendees 1 hour before meeting
         const { data: attendees } = await supabase.from('attendees')
             .select('user_id')
-            .eq('meeting_id', res.meetings[0].id)
-            .eq('status', 'accepted');
+            .eq('meeting_id', res.meetings[0].id);
         
-        if (attendees) {
+        if (attendees && attendees.length > 0) {
             for (const att of attendees) {
-                await sendReminderIfNotSent(att.user_id, reminderMsg);
+                await sendReminderIfNotSent(att.user_id, attReminderMsg);
             }
         }
       }
@@ -57,7 +55,6 @@ async function sendReminderIfNotSent(userId, message) {
       .select('id')
       .eq('user_id', userId)
       .eq('message', message)
-      .eq('type', 'reminder')
       .maybeSingle();
       
     if (error) throw error;
